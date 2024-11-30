@@ -3,16 +3,6 @@
 version = 4
 
 [[package]]
-name = "VulkanoTest"
-version = "0.1.0"
-dependencies = [
- "image",
- "vulkano",
- "vulkano-shaders",
- "winit",
-]
-
-[[package]]
 name = "ab_glyph"
 version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -339,10 +329,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
+name = "editor"
+version = "0.1.0"
+dependencies = [
+ "engine",
+]
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
+
+[[package]]
+name = "engine"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "vulkano",
+ "vulkano-shaders",
+ "winit",
+]
 
 [[package]]
 name = "equivalent"

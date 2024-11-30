@@ -46,7 +46,7 @@ mod cs {
     }
 }
 
-pub fn image_test(device : Arc<Device>, queue : Arc<Queue>, allocator : Arc<VulkanAllocation>) {
+pub fn image_test(device : &Arc<Device>, queue : &Arc<Queue>, allocator : &Arc<VulkanAllocation>) {
     let memory_allocator = allocator.general_allocator.clone();
     let command_buffer_allocator = &allocator.buffer_allocator;
 

@@ -1,0 +1,10 @@
+[package]
+name = "editor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+engine = { version = "0.1.0", path = "../engine" }
+
+[profile.dev]
+opt-level = 1 
