@@ -1,11 +1,18 @@
 use std::sync::Arc;
-
-use vulkano::{device::*, instance::*, VulkanLibrary};
+use vulkano::{
+    command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo}, 
+    device::*, 
+    instance::*, 
+    memory::allocator::{FreeListAllocator, GenericMemoryAllocator, StandardMemoryAllocator}, 
+    pipeline::{compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo, ComputePipeline, PipelineLayout, PipelineShaderStageCreateInfo}, 
+    shader::EntryPoint, 
+    VulkanLibrary
+};
 
 pub struct VulkanToolset {
     pub vulkan_instance : Arc<Instance>,
     pub vulkan_device : Arc<Device>,
-    pub vulkan_queue : Arc<Queue>
+    pub vulkan_queue : Arc<Queue>,
 }
 
 impl VulkanToolset {
@@ -63,5 +70,59 @@ impl VulkanToolset {
         };
 
         toolset
+    }
+}
+
+pub struct VulkanAllocation {
+    pub general_allocator : Arc<GenericMemoryAllocator<FreeListAllocator>>,
+    pub buffer_allocator : StandardCommandBufferAllocator,
+}
+
+impl VulkanAllocation {
+    pub fn new(device : Arc<Device>) -> VulkanAllocation {
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
+
+        let command_buffer_allocator = StandardCommandBufferAllocator::new(
+            device.clone(),
+            StandardCommandBufferAllocatorCreateInfo::default(),
+        );
+
+        let allocator = VulkanAllocation {
+            general_allocator : memory_allocator,
+            buffer_allocator : command_buffer_allocator,
+        };
+
+        allocator
+    }
+}
+
+pub struct ComputeShader {
+    pub pipeline : Arc<ComputePipeline>,
+}
+
+impl ComputeShader {
+    pub fn new(shader : EntryPoint, device : Arc<Device>) -> ComputeShader {
+        // Setup compute pipeline
+        let stage = PipelineShaderStageCreateInfo::new(shader);
+        let layout = PipelineLayout::new(
+            device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let compute_pipeline = ComputePipeline::new(
+            device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .expect("failed to create compute pipeline");
+
+        let compute = ComputeShader {
+            pipeline : compute_pipeline,
+        };
+
+        compute
     }
 }

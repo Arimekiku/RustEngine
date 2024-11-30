@@ -1,19 +1,15 @@
 use std::sync::Arc;
-
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage}, 
-    command_buffer::*, 
+    command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage}, 
     descriptor_set::{allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet}, 
-    device::{Device, Queue}, 
-    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, 
-    pipeline::*, 
+    device::{Device, Queue}, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter}, 
+    pipeline::{Pipeline, PipelineBindPoint}, 
     sync::{self, GpuFuture}
 };
-use compute::ComputePipelineCreateInfo;
-use layout::PipelineDescriptorSetLayoutCreateInfo;
-use allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
+use crate::vulkan::{ComputeShader, VulkanAllocation};
 
-pub mod cs {
+mod cs {
     vulkano_shaders::shader!{
         ty: "compute",
         src: r"
@@ -33,34 +29,16 @@ pub mod cs {
     }
 }
 
-pub fn compute_test(device : Arc<Device>, queue : Arc<Queue>) {
-    // Setup memory allocators for our shader
-    let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-    let command_buffer_allocator = StandardCommandBufferAllocator::new(
-        device.clone(),
-        StandardCommandBufferAllocatorCreateInfo::default(),
-    );
+pub fn compute_test(device : Arc<Device>, queue : Arc<Queue>, allocator : Arc<VulkanAllocation>) {
+    let memory_allocator = allocator.general_allocator.clone();
+    let command_buffer_allocator = &allocator.buffer_allocator;
 
     // Create compute shader
     let shader = cs::load(device.clone()).expect("failed to create shader module");
     let cs = shader.entry_point("main").unwrap();
 
-    // Setup shader pipeline
-    let stage = PipelineShaderStageCreateInfo::new(cs);
-    let layout = PipelineLayout::new(
-        device.clone(),
-        PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
-            .into_pipeline_layout_create_info(device.clone())
-            .unwrap(),
-    )
-    .unwrap();
-
-    let compute_pipeline = ComputePipeline::new(
-        device.clone(),
-        None,
-        ComputePipelineCreateInfo::stage_layout(stage, layout),
-    )
-    .expect("failed to create compute pipeline");
+    let compute = ComputeShader::new(cs, device.clone());
+    let compute_pipeline = compute.pipeline;
 
     // Setup data buffer
     // We will apply compute shader to this data buffer
@@ -80,19 +58,13 @@ pub fn compute_test(device : Arc<Device>, queue : Arc<Queue>) {
     )
     .expect("failed to create buffer");
 
-    // Setup descriptor sets for out data buffer
-    let descriptor_set_allocator =
-    StandardDescriptorSetAllocator::new(device.clone(), Default::default());
-    let pipeline_layout = compute_pipeline.layout();
-    let descriptor_set_layouts = pipeline_layout.set_layouts();
+    // Setup descriptor sets for our data buffer
+    let descriptor_set_allocator = StandardDescriptorSetAllocator::new(device.clone(), Default::default());
+    let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
 
-    let descriptor_set_layout_index = 0;
-    let descriptor_set_layout = descriptor_set_layouts
-        .get(descriptor_set_layout_index)
-        .unwrap();
     let descriptor_set = PersistentDescriptorSet::new(
         &descriptor_set_allocator,
-        descriptor_set_layout.clone(),
+        layout.clone(),
         [WriteDescriptorSet::buffer(0, data_buffer.clone())], // 0 is the binding
         [],
     )
@@ -100,7 +72,7 @@ pub fn compute_test(device : Arc<Device>, queue : Arc<Queue>) {
 
     // Setup buffer builder command
     let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
-        &command_buffer_allocator,
+        command_buffer_allocator,
         queue.queue_family_index(),
         CommandBufferUsage::OneTimeSubmit,
     )
@@ -110,26 +82,27 @@ pub fn compute_test(device : Arc<Device>, queue : Arc<Queue>) {
     
     // Define buffer builder command
     command_buffer_builder
-        .bind_pipeline_compute(compute_pipeline.clone())
-        .unwrap()
-        .bind_descriptor_sets(
-            PipelineBindPoint::Compute,
-            compute_pipeline.layout().clone(),
-            descriptor_set_layout_index as u32,
-            descriptor_set,
-        )
-        .unwrap()
-        .dispatch(work_group_counts)
-        .unwrap();
+    .bind_pipeline_compute(compute_pipeline.clone())
+    .unwrap()
+    .bind_descriptor_sets(
+        PipelineBindPoint::Compute,
+        compute_pipeline.layout().clone(),
+        0,
+        descriptor_set,
+    )
+    .unwrap()
+    .dispatch(work_group_counts)
+    .unwrap();
     
     let command_buffer = command_buffer_builder.build().unwrap();
 
     // Execute buffer creation command
     let future = sync::now(device.clone())
-        .then_execute(queue.clone(), command_buffer)
-        .unwrap()
-        .then_signal_fence_and_flush()
-        .unwrap();
+    .then_execute(queue.clone(), command_buffer)
+    .unwrap()
+    .then_signal_fence_and_flush()
+    .unwrap();
+
     future.wait(None).unwrap();
 
     // Get new data buffer values
