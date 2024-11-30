@@ -1,28 +1,27 @@
 use std::sync::Arc;
 use vulkano::{
-    command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo}, 
-    device::*, 
-    instance::*, 
-    memory::allocator::{FreeListAllocator, GenericMemoryAllocator, StandardMemoryAllocator}, 
-    pipeline::{compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo, ComputePipeline, PipelineLayout, PipelineShaderStageCreateInfo}, 
-    shader::EntryPoint, 
-    VulkanLibrary
+    command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo}, device::*, instance::*, memory::allocator::{FreeListAllocator, GenericMemoryAllocator, StandardMemoryAllocator}, pipeline::{compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo, ComputePipeline, PipelineLayout, PipelineShaderStageCreateInfo}, shader::EntryPoint, swapchain::Surface, VulkanLibrary
 };
+use winit::event_loop::EventLoop;
 
 pub struct VulkanToolset {
     pub vulkan_instance : Arc<Instance>,
     pub vulkan_device : Arc<Device>,
     pub vulkan_queue : Arc<Queue>,
+    pub vulkan_event : EventLoop<()>
 }
 
 impl VulkanToolset {
     pub fn new() -> VulkanToolset {
         // Create vulkan instances
         let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
+        let event_loop = EventLoop::new();  // ignore this for now
+        let required_extensions = Surface::required_extensions(&event_loop);
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
+                enabled_extensions: required_extensions,
                 ..Default::default()
             },
         )
@@ -66,7 +65,8 @@ impl VulkanToolset {
         let toolset = VulkanToolset {
             vulkan_instance : instance,
             vulkan_device : device,
-            vulkan_queue : queue
+            vulkan_queue : queue,
+            vulkan_event : event_loop,
         };
 
         toolset

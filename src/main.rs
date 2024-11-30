@@ -1,11 +1,13 @@
 pub mod vulkan;
 pub mod compute_test;
 pub mod image_test;
+pub mod window_test;
 
 use compute_test::compute_test;
 use image_test::image_test;
+use window_test::window_test;
 use std::sync::Arc;
-use vulkan::{VulkanAllocation, VulkanToolset};
+use vulkan::vulkan::{VulkanAllocation, VulkanToolset};
 
 fn main() {
     // Setup Vulkan toolset
@@ -20,6 +22,8 @@ fn main() {
 
     // Test basic image workability
     image_test(device.clone(), queue.clone(), allocator.clone());
+
+    window_test(toolset.vulkan_event, toolset.vulkan_instance);
 
     println!("Everything succeeded!");
 }

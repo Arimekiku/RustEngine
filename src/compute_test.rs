@@ -7,7 +7,7 @@ use vulkano::{
     pipeline::{Pipeline, PipelineBindPoint}, 
     sync::{self, GpuFuture}
 };
-use crate::vulkan::{ComputeShader, VulkanAllocation};
+use crate::vulkan::vulkan::{ComputeShader, VulkanAllocation};
 
 mod cs {
     vulkano_shaders::shader!{
