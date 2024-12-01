@@ -63,26 +63,26 @@ pub fn image_test(device : &Arc<Device>, queue : &Arc<Queue>, allocator : &Arc<V
             memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
             ..Default::default()
         },
-    )?;
+    ).unwrap();
 
     // Create compute shader
     let shader = cs::load(device.clone()).expect("failed to create shader module");
-    let cs = shader.entry_point("main")?;
+    let cs = shader.entry_point("main").unwrap();
 
     let compute = ComputeShader::new(cs, device.clone());
     let compute_pipeline = compute.pipeline;
 
     // Setup descriptor sets for our data buffer
     let descriptor_set_allocator = StandardDescriptorSetAllocator::new(device.clone(), Default::default());
-    let view = ImageView::new_default(image.clone())?;
+    let view = ImageView::new_default(image.clone()).unwrap();
 
-    let layout = compute_pipeline.layout().set_layouts().get(0)?;
+    let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
     let set = PersistentDescriptorSet::new(
         &descriptor_set_allocator,
         layout.clone(),
         [WriteDescriptorSet::image_view(0, view.clone())], // 0 is the binding
         [],
-    )?;
+    ).unwrap();
     
     let buf = Buffer::from_iter(
         memory_allocator.clone(),
@@ -103,32 +103,36 @@ pub fn image_test(device : &Arc<Device>, queue : &Arc<Queue>, allocator : &Arc<V
         command_buffer_allocator,
         queue.queue_family_index(),
         CommandBufferUsage::OneTimeSubmit,
-    )?;
+    ).unwrap();
 
     builder
-    .bind_pipeline_compute(compute_pipeline.clone())?
+    .bind_pipeline_compute(compute_pipeline.clone())
+    .unwrap()
     .bind_descriptor_sets(
         PipelineBindPoint::Compute,
         compute_pipeline.layout().clone(),
         0,
         set,
-    )?
-    .dispatch([1024 / 8, 1024 / 8, 1])?
+    ).unwrap()
+    .dispatch([1024 / 8, 1024 / 8, 1])
+    .unwrap()
     .copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(
         image.clone(),
         buf.clone(),
-    ))?;
+    )).unwrap();
     
-    let command_buffer = builder.build()?;
+    let command_buffer = builder.build().unwrap();
 
     let future = sync::now(device.clone())
-    .then_execute(queue.clone(), command_buffer)?
-    .then_signal_fence_and_flush()?;
+    .then_execute(queue.clone(), command_buffer)
+    .unwrap()
+    .then_signal_fence_and_flush()
+    .unwrap();
 
-    future.wait(None)?;
+    future.wait(None).unwrap();
 
-    let buffer_content = buf.read()?;
-    let image = ImageBuffer::<Rgba<u8>, _>::from_raw(1024, 1024, &buffer_content[..])?;
+    let buffer_content = buf.read().unwrap();
+    let image = ImageBuffer::<Rgba<u8>, _>::from_raw(1024, 1024, &buffer_content[..]).unwrap();
 
-    image.save("image.png")?;
+    image.save("image.png").unwrap();
 }

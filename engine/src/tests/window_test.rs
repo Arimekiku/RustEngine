@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use vulkano::{buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer}, device::Device, memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter}, pipeline::graphics::vertex_input::Vertex, render_pass, shader::ShaderModule, swapchain::{self, SwapchainCreateInfo, SwapchainPresentInfo}, sync::{self, future::FenceSignalFuture, GpuFuture}, Validated, VulkanError};
+use vulkano::{buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer}, device::Device, memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter}, pipeline::graphics::vertex_input::Vertex, shader::ShaderModule, swapchain::{self, SwapchainCreateInfo, SwapchainPresentInfo}, sync::{self, future::FenceSignalFuture, GpuFuture}, Validated, VulkanError};
 use winit::{event::{Event, WindowEvent}, event_loop::{ControlFlow, EventLoop}};
 
 use crate::vulkan::vulkan::VulkanToolset;
@@ -90,8 +90,10 @@ impl Triangle {
 pub fn window_test(toolset : VulkanToolset, event_loop : EventLoop<()>) {
     let device = toolset.vulkan_device.clone();
     let allocator = &toolset.vulkan_allocator;
-    let mut viewport = toolset.viewport.clone();
-    let mut swapchain = toolset.swapchain.clone();
+
+    let window = toolset.get_vulkan_window().to_owned().clone();
+    let mut viewport = window.get_window_viewport().to_owned();
+    let (mut swapchain, images) = window.get_swapchain();
     let queue = toolset.vulkan_queue.clone();
 
     let triangle = Arc::new(Triangle::new(allocator.general_allocator.clone(), &device));
@@ -100,15 +102,15 @@ pub fn window_test(toolset : VulkanToolset, event_loop : EventLoop<()>) {
     let vbo = triangle.vertex_buffer.clone();
 
     let pipeline = toolset.create_graphics_pipeline(triangle.vertex_shader.clone(), triangle.fragment_shader.clone());
-    let framebuffers = &toolset.create_framebuffers(&toolset.images);
+    let framebuffers = window.create_framebuffers(images.to_vec());
     let mut command_buffer = toolset.create_command_buffers(&triangle.vertex_buffer, &pipeline, &framebuffers);
 
     let mut window_resized = false;
     let mut recreate_swapchain = false;
 
-    let window = toolset.vulkan_window.clone();
+    let native_window = window.get_native_window();
 
-    let frames_in_flight = toolset.images.len();
+    let frames_in_flight = images.len();
     let mut fences: Vec<Option<Arc<FenceSignalFuture<_>>>> = vec![None; frames_in_flight];
     let mut previous_fence_i = 0;
 
@@ -130,7 +132,7 @@ pub fn window_test(toolset : VulkanToolset, event_loop : EventLoop<()>) {
                 if window_resized || recreate_swapchain {
                     recreate_swapchain = false;
                 
-                    let new_dimensions = window.inner_size();
+                    let new_dimensions = native_window.inner_size();
                 
                     let (new_swapchain, new_images) = swapchain
                         .recreate(SwapchainCreateInfo {
@@ -139,7 +141,7 @@ pub fn window_test(toolset : VulkanToolset, event_loop : EventLoop<()>) {
                         })
                         .expect("failed to recreate swapchain: {e}");
                     swapchain = new_swapchain;
-                    let new_framebuffers = toolset.create_framebuffers(&new_images);
+                    let new_framebuffers = window.create_framebuffers(new_images);
                 
                     if window_resized {
                         window_resized = false;
