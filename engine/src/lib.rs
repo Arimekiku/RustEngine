@@ -1,20 +1,21 @@
 mod vulkan;
 mod tests;
 
-use std::sync::Arc;
 use tests::{compute_test::compute_test, image_test::image_test, window_test::window_test};
-use vulkan::vulkan::{VulkanAllocation, VulkanToolset};
+use vulkan::vulkan::VulkanToolset;
+use winit::event_loop::EventLoop;
 
 pub struct App;
 
 impl App {
     pub fn run() {
         // Setup Vulkan toolset
-        let toolset = VulkanToolset::new();
-        let device = toolset.vulkan_device;
-        let queue = toolset.vulkan_queue;
+        let event_loop = EventLoop::new();
 
-        let allocator = Arc::new(VulkanAllocation::new(device.clone()));
+        let toolset = VulkanToolset::new(&event_loop);
+        let device = &toolset.vulkan_device;
+        let queue = &toolset.vulkan_queue;
+        let allocator = &toolset.vulkan_allocator;
 
         // Test basic shader workability
         compute_test(&device, &queue, &allocator);
@@ -22,7 +23,7 @@ impl App {
         // Test basic image workability
         image_test(&device, &queue, &allocator);
 
-        // Test basic window workability
-        window_test(toolset.vulkan_event);
+        // Vertex test
+        window_test(toolset, event_loop);
     }
 }
