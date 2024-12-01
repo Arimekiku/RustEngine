@@ -138,7 +138,7 @@ impl VulkanToolset {
             ).unwrap()
         }).collect::<Vec<_>>()
     }
-
+  
     pub fn create_graphics_pipeline(&self, vs : Arc<ShaderModule>, fs : Arc<ShaderModule>) -> Arc<GraphicsPipeline> {
         let vs = vs.entry_point("main").unwrap();
         let fs = fs.entry_point("main").unwrap();
