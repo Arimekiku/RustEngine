@@ -13,9 +13,9 @@ impl App {
         let event_loop = EventLoop::new();
 
         let toolset = VulkanToolset::new(&event_loop);
-        let device = &toolset.vulkan_device;
-        let queue = &toolset.vulkan_queue;
-        let allocator = &toolset.vulkan_allocator;
+        let device = &toolset.logical_device;
+        let queue = &toolset.device_queue;
+        let allocator = &toolset.memory_allocator;
 
         // Test basic shader workability
         compute_test(&device, &queue, &allocator);

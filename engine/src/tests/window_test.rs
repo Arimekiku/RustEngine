@@ -12,6 +12,16 @@ pub struct VulkanVertex {
     position: [f32; 2],
 }
 
+impl VulkanVertex {
+    pub fn new(x : f32, y : f32) -> VulkanVertex {
+        let vertex = VulkanVertex {
+            position : [x, y]
+        };
+
+        vertex
+    }
+}
+
 mod vs {
     vulkano_shaders::shader! {
         ty: "vertex",
@@ -50,17 +60,11 @@ pub struct Triangle {
 
 impl Triangle {
     pub fn new(memory_allocator : Arc<dyn MemoryAllocator>, device : &Arc<Device>) -> Triangle {
-        let vertex1 = VulkanVertex {
-            position: [-0.5, -0.5],
-        };
-    
-        let vertex2 = VulkanVertex {
-            position: [0.0, 0.5],
-        };
-    
-        let vertex3 = VulkanVertex {
-            position: [0.5, -0.25],
-        };
+        let vbo = vec![
+            VulkanVertex::new(-0.5, -0.5),
+            VulkanVertex::new( 0.0,  0.5),
+            VulkanVertex::new( 0.5, -0.25),
+        ];
     
         let vbo = Buffer::from_iter(
             memory_allocator.clone(),
@@ -73,7 +77,7 @@ impl Triangle {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            vec![vertex1, vertex2, vertex3],
+            vbo,
         ).unwrap();
     
         let vs = vs::load(device.clone()).expect("failed to create shader module");
@@ -88,27 +92,20 @@ impl Triangle {
 }
 
 pub fn window_test(toolset : VulkanToolset, event_loop : EventLoop<()>) {
-    let device = toolset.vulkan_device.clone();
-    let allocator = &toolset.vulkan_allocator;
-
     let window = toolset.get_vulkan_window().to_owned().clone();
     let mut viewport = window.get_window_viewport().to_owned();
     let (mut swapchain, images) = window.get_swapchain();
-    let queue = toolset.vulkan_queue.clone();
-
+    
+    let device = toolset.logical_device.clone();
+    let allocator = &toolset.memory_allocator;
     let triangle = Arc::new(Triangle::new(allocator.general_allocator.clone(), &device));
-    let fs = triangle.fragment_shader.clone();
-    let vs = triangle.vertex_shader.clone();
-    let vbo = triangle.vertex_buffer.clone();
 
-    let pipeline = toolset.create_graphics_pipeline(triangle.vertex_shader.clone(), triangle.fragment_shader.clone());
+    let pipeline = toolset.create_graphics_pipeline(&triangle.vertex_shader, &triangle.fragment_shader);
     let framebuffers = window.create_framebuffers(images.to_vec());
     let mut command_buffer = toolset.create_command_buffers(&triangle.vertex_buffer, &pipeline, &framebuffers);
 
     let mut window_resized = false;
     let mut recreate_swapchain = false;
-
-    let native_window = window.get_native_window();
 
     let frames_in_flight = images.len();
     let mut fences: Vec<Option<Arc<FenceSignalFuture<_>>>> = vec![None; frames_in_flight];
@@ -132,6 +129,7 @@ pub fn window_test(toolset : VulkanToolset, event_loop : EventLoop<()>) {
                 if window_resized || recreate_swapchain {
                     recreate_swapchain = false;
                 
+                    let native_window = window.get_native_window();
                     let new_dimensions = native_window.inner_size();
                 
                     let (new_swapchain, new_images) = swapchain
@@ -145,9 +143,13 @@ pub fn window_test(toolset : VulkanToolset, event_loop : EventLoop<()>) {
                 
                     if window_resized {
                         window_resized = false;
-                
                         viewport.extent = new_dimensions.into();
-                        let new_pipeline = toolset.create_graphics_pipeline(vs.clone(), fs.clone());
+
+                        let fs = triangle.fragment_shader.clone();
+                        let vs = triangle.vertex_shader.clone();
+                        let vbo = triangle.vertex_buffer.clone();
+
+                        let new_pipeline = toolset.create_graphics_pipeline(&vs, &fs);
                         command_buffer = toolset.create_command_buffers(&vbo, &new_pipeline, &new_framebuffers);
                     }
                 }
@@ -185,6 +187,7 @@ pub fn window_test(toolset : VulkanToolset, event_loop : EventLoop<()>) {
                     Some(fence) => fence.boxed(),
                 };
 
+                let queue = toolset.device_queue.clone();
                 let future = previous_future
                     .join(acquire_future)
                     .then_execute(queue.clone(), command_buffer[image_i as usize].clone())

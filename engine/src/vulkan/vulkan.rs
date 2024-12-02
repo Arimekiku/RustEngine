@@ -5,50 +5,52 @@ use vulkano::{
 use winit::event_loop::EventLoop;
 
 use crate::tests::window_test::VulkanVertex;
-
 use super::vulkan_window::VulkanWindow;
 
 pub struct VulkanToolset {
-    pub vulkan_instance : Arc<Instance>,
-    pub vulkan_device : Arc<Device>,
-    pub vulkan_queue : Arc<Queue>,
-    pub vulkan_allocator : Arc<VulkanAllocation>,
-    pub vulkan_window : Arc<VulkanWindow>,
+    pub instance : Arc<Instance>,
+    pub logical_device : Arc<Device>,
+    pub device_queue : Arc<Queue>,
+    pub memory_allocator : Arc<VulkanAllocation>,
+    pub window : Arc<VulkanWindow>,
 }
 
 impl VulkanToolset {
     pub fn new(event_loop : &EventLoop<()>) -> VulkanToolset {
-        let instance = Self::create_instance(event_loop);
-        let mut deref_window = VulkanWindow::new(&instance, event_loop);
+        // Create basic instances
+        let vulkan_instance = Self::create_instance(event_loop);
+        let mut window_instance = VulkanWindow::new(&vulkan_instance, event_loop);
 
-        let surface = deref_window.get_window_surface();
-        let (device, queue) = Self::create_logical_device(&instance, &surface);
-        deref_window.create_swapchain(&device);
-        let window = Arc::new(deref_window);
+        // Create logical device
+        let surface = window_instance.get_window_surface();
+        let (device, queue) = Self::create_logical_device(&vulkan_instance, &surface);
 
+        // Create vulkan window
+        window_instance.create_swapchain(&device);
+        let vulkan_window = Arc::new(window_instance);
+
+        // Create vulkan allocator
         let allocator = Arc::new(VulkanAllocation::new(device.clone()));
 
-        let toolset = VulkanToolset {
-            vulkan_instance : instance,
-            vulkan_device : device,
-            vulkan_queue : queue,
-            vulkan_allocator : allocator,
-            vulkan_window : window
-        };
-
-        toolset
+        VulkanToolset {
+            instance: vulkan_instance,
+            logical_device : device,
+            device_queue : queue,
+            memory_allocator : allocator,
+            window: vulkan_window
+        }
     }
   
-    pub fn create_graphics_pipeline(&self, vs : Arc<ShaderModule>, fs : Arc<ShaderModule>) -> Arc<GraphicsPipeline> {
-        let render_pass = self.vulkan_window.get_render_pass();
-        let viewport = self.vulkan_window.get_window_viewport();
+    pub fn create_graphics_pipeline(&self, vs : &Arc<ShaderModule>, fs : &Arc<ShaderModule>) -> Arc<GraphicsPipeline> {
+        let render_pass = self.window.get_render_pass();
+        let viewport = self.window.get_window_viewport();
 
         let vs = vs.entry_point("main").unwrap();
         let fs = fs.entry_point("main").unwrap();
 
         let vertex_input_state = VulkanVertex::per_vertex()
-            .definition(&vs.info().input_interface)
-            .unwrap();
+        .definition(&vs.info().input_interface)
+        .unwrap();
 
         let stages = [
             PipelineShaderStageCreateInfo::new(vs),
@@ -56,16 +58,16 @@ impl VulkanToolset {
         ];
 
         let layout = PipelineLayout::new(
-            self.vulkan_device.clone(),
+            self.logical_device.clone(),
             PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
-                .into_pipeline_layout_create_info(self.vulkan_device.clone())
+                .into_pipeline_layout_create_info(self.logical_device.clone())
                 .unwrap(),
         ).unwrap();
 
         let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
 
         GraphicsPipeline::new(
-            self.vulkan_device.clone(),
+            self.logical_device.clone(),
             None,
             GraphicsPipelineCreateInfo {
                 stages: stages.into_iter().collect(),
@@ -91,13 +93,14 @@ impl VulkanToolset {
         framebuffers
         .iter()
         .map(|framebuffer| {
+            // Create graphics pipeline
             let mut builder = AutoCommandBufferBuilder::primary(
-                &self.vulkan_allocator.buffer_allocator,
-                self.vulkan_queue.queue_family_index(),
-                // Don't forget to write the correct buffer usage.
+                &self.memory_allocator.buffer_allocator,
+                self.device_queue.queue_family_index(),
                 CommandBufferUsage::MultipleSubmit,
             ).unwrap();
 
+            // Fill pipeline with commands
             builder.begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![Some([0.1, 0.1, 0.1, 1.0].into())],
@@ -117,27 +120,27 @@ impl VulkanToolset {
             .end_render_pass(SubpassEndInfo::default())
             .unwrap();
 
+            // Build result pipeline
             builder.build().unwrap()
         }).collect()
     }
 
     pub fn get_vulkan_window(&self) -> &Arc<VulkanWindow> {
-        &self.vulkan_window
+        &self.window
     } 
 
     fn create_instance(event_loop : &EventLoop<()>) -> Arc<Instance> {
         let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
         let required_extensions = Surface::required_extensions(&event_loop);
-        let instance = Instance::new(
+
+        Instance::new(
             library,
             InstanceCreateInfo {
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
                 enabled_extensions: required_extensions,
                 ..Default::default()
             },
-        ).expect("failed to create instance");
-
-        instance
+        ).expect("failed to create instance")
     }
 
     fn create_logical_device(instance : &Arc<Instance>, surface : &Arc<Surface>) -> (Arc<Device>, Arc<Queue>) {
@@ -170,7 +173,6 @@ impl VulkanToolset {
         let (device, mut queues) = Device::new(
             physical_device,
             DeviceCreateInfo {
-                // here we pass the desired queue family to use by index
                 queue_create_infos: vec![QueueCreateInfo {
                     queue_family_index,
                     ..Default::default()
@@ -200,12 +202,10 @@ impl VulkanAllocation {
             StandardCommandBufferAllocatorCreateInfo::default(),
         );
 
-        let allocator = VulkanAllocation {
+        VulkanAllocation {
             general_allocator : memory_allocator,
             buffer_allocator : command_buffer_allocator,
-        };
-
-        allocator
+        }
     }
 }
 
@@ -229,10 +229,8 @@ impl ComputeShader {
             ComputePipelineCreateInfo::stage_layout(stage, layout),
         ).expect("failed to create compute pipeline");
 
-        let compute = ComputeShader {
+        ComputeShader {
             pipeline : compute_pipeline,
-        };
-
-        compute
+        }
     }
 }
